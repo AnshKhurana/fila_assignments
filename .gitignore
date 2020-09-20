@@ -1,0 +1,7 @@
+.DS_Store*
+cs747-pa1.zip
+.idea*
+cs747-pa1/.idea/workspace.xml
+cs747-pa1/.idea*
+cs747-pa1/.idea/*
+cs747-pa1/.idea/**

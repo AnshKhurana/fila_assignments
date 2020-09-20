@@ -1,2 +1,4 @@
-1. Number of initial pulls to start the algorithms:
-eps-g
+1. Number of initial pulls to start the algorithms: INIT_PULLS global variable
+
+2. Tie breaking: np.argmax does automatic tie breaking
+
