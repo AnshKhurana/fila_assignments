@@ -21,7 +21,7 @@ def make_t1():
     lines_to_write = []
     for instance in ['i-1', 'i-2', 'i-3']:
         values = dict()
-        for algorithm in ['epsilon-greedy', 'ucb', 'thompson-sampling']:
+        for algorithm in ['epsilon-greedy', 'ucb', 'kl-ucb', 'thompson-sampling']:
             values[algorithm] = []
             with open('output_{}.txt_{}.txt'.format(instance, algorithm), 'r') as f:
                 horizon_reg = dict()
