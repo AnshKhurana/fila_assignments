@@ -26,5 +26,7 @@ def get_results(instance_name, algorithm_name, eps):
 
 
 if __name__ == '__main__':
+    exit()
     args = parser.parse_args()
+
     get_results(args.instance, args.algorithm, args.epsilon)
