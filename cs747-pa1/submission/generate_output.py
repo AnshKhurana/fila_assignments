@@ -30,7 +30,7 @@ def perform_task1():
     instance_dir = '../instances'
     for instance in os.listdir(instance_dir):
         instance_file = os.path.join(instance_dir, instance)
-        for algorithm in ['epsilon-greedy', 'ucb', 'kl-ucb', 'thompson-sampling']:
+        for algorithm in ['kl-ucb']:
             subprocess.Popen('python get_results.py  --instance {} --algorithm {} --epsilon 0.02'.format(instance_file, algorithm), shell=True)
 
 

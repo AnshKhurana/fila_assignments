@@ -21,6 +21,7 @@ def get_results(instance_name, algorithm_name, eps):
                                                                                              seed, horizon), shell=True)
                 # current_out = current_out.decode('utf-8').strip()
                 # print(type(current_out))
+                print(current_out.decode('utf-8'))
                 f.write(current_out.decode('utf-8'))
 
 

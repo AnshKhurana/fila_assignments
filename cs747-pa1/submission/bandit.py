@@ -10,7 +10,7 @@ parser.add_argument('--instance', help='where in is a path to the instance file'
 parser.add_argument('--algorithm', help='where al is one of epsilon-greedy, ucb, kl-ucb,'
                                         ' thompson-sampling, and thompson-sampling-with-hint', type=str)
 parser.add_argument('--randomSeed', help='rs, where rs is a non-negative integer.', type=int)
-parser.add_argument('--epsilon',  help='ep, where ep is a number in [0, 1].', type=float)
+parser.add_argument('--epsilon',  help='ep, where ep is a number in [0, 1].', type=float, default=0.02)
 parser.add_argument('--horizon', help='hz, where hz is a non-negative integer.', type=int)
 args = parser.parse_args()
 
@@ -19,7 +19,7 @@ DEBUG = False
 INIT_PULLS = 3
 rng = np.random.RandomState(args.randomSeed)
 KL_UCB_HYP = 3
-KL_PRECISION = 1e-5
+KL_PRECISION = 1e-6
 
 def return_reward(n, p):
     return rng.binomial(n, p)
@@ -34,7 +34,6 @@ def get_probs_from_file(instance_file):
         for line in f.readlines():
             arms.append(float(line))
     return arms
-
 
 class global_arms:
 
@@ -91,6 +90,8 @@ def get_ucb(arm_means, num_pulls, t):
     # num_pulls=num_pulls
     extra = (1 / num_pulls) * 2 * np.log(t)
     ucb = arm_means+np.sqrt(extra)
+    if DEBUG:
+        print(ucb)
     return ucb
 
 def ucb(arm_means, num_pulls, horizon):
@@ -125,15 +126,13 @@ def best_q(p_hat, calc_bound):
     q_lb = p_hat
     q_ub = 1
     q_mid = (q_lb+q_ub)/2
-    while q_ub - q_lb > KL_PRECISION:
+    while (q_ub - q_lb) > KL_PRECISION:
         q_mid = (q_lb+q_ub)/2
         current = get_kl_divergence(p_hat, q_mid)
         if current > calc_bound:
             q_ub = q_mid
-        elif current < calc_bound:
-            q_lb = q_mid
         else:
-            return q_mid
+            q_lb = q_mid
 
     return q_mid
 
@@ -141,11 +140,12 @@ def best_q(p_hat, calc_bound):
 def get_kl_ucb(arm_means, num_pulls, t):
 
     kl_ucb = [0]*len(arm_means)
-    calc_bound = np.log(t)+KL_UCB_HYP*np.log(np.log(t)) / num_pulls
+    calc_bound = np.log(t)+KL_UCB_HYP*np.log(np.log(t))
     for i in range(len(arm_means)):
         p_hat = arm_means[i]
-        kl_ucb[i] = best_q(p_hat, calc_bound[i])
-
+        kl_ucb[i] = best_q(p_hat, calc_bound/num_pulls[i])
+        if DEBUG:
+            print(p_hat, kl_ucb[i])
     return kl_ucb
 
 
@@ -156,7 +156,7 @@ def kl_ucb(arm_means, num_pulls, horizon):
     pulls_till_now = np.sum(num_pulls)
     for t in range(pulls_till_now, horizon):
 
-        kl_ucb_vals = get_kl_ucb(arm_means, num_pulls, t+1)
+        kl_ucb_vals = get_kl_ucb(arm_means, num_pulls, t)
         arm_to_pull = np.argmax(kl_ucb_vals)
         r_t = arms.pull_arm(arm_to_pull)
         if r_t==1:
@@ -166,11 +166,6 @@ def kl_ucb(arm_means, num_pulls, horizon):
 
     return rew
 
-
-def get_thomson_probs(arm_means, num_pulls):
-
-    successes = arm_means * num_pulls
-    assert (len(successes)==len(arm_means))
 
 def get_thompson_probs(arm_means, num_pulls):
 
@@ -202,15 +197,40 @@ def thompson_sampling(arm_means, num_pulls, horizon):
     return rew
 
 
-def beta_ll(a, b, x):
+def thompson_discrete(ordered_probs, horizon):
+    num_arms = len(ordered_probs)
+    ordered_probs = np.array(ordered_probs, dtype=float)
+    prob_matrix = np.ones((num_arms, num_arms))
+    rew = 0
+    for t in range(horizon):
+        arm_to_pull = np.argmax(prob_matrix[:, -1])
+        r_t = arms.pull_arm(arm_to_pull)
+        if r_t == 1:
+            rew += 1
+            prob_matrix[arm_to_pull] = ordered_probs*prob_matrix[arm_to_pull, :] / np.sum(ordered_probs*prob_matrix[arm_to_pull, :])
+        else:
+            prob_matrix[arm_to_pull] = (1-ordered_probs) * prob_matrix[arm_to_pull, :] / np.sum((1-ordered_probs) * prob_matrix[arm_to_pull, :])
+        # arm_means[arm_to_pull] = (arm_means[arm_to_pull] * num_pulls[arm_to_pull] + r_t) / (num_pulls[arm_to_pull] + 1)
+        # num_pulls[arm_to_pull] += 1
+
+    return rew
+
+
+def beta_ll(a, b, arm_probs):
 
     # return math.gamma(a+b) * pow(x, a-1) * pow(1-x, b-1) / math.gamma(a)*math.gamma(b)
     a = int(a)
     b = int(b)
-    return pow(x, a - 1) * pow(1 - x, b - 1) / math.comb(a+b, a)
+    arm_probs = np.array(arm_probs, dtype=float)
+    # print(arm_probs)
+    lls = np.power(arm_probs, a-1)*np.power(1-arm_probs, b-1)
+    lls = lls/np.sum(lls)
+    if DEBUG:
+        print(lls)
+    return lls
 
 
-def get_thompson_lls(arm_means, num_pulls, p_star):
+def get_thompson_lls(arm_means, num_pulls, ordered_probs):
 
     successes = arm_means * num_pulls
     failures = num_pulls - successes
@@ -220,7 +240,7 @@ def get_thompson_lls(arm_means, num_pulls, p_star):
         a = successes[i]+1
         b = failures[i]+1
         # print("arms ",i,a,b)
-        lls.append(beta_ll(a,b,p_star))
+        lls.append(beta_ll(a, b, ordered_probs)[-1])
 
     return lls
 
@@ -233,15 +253,13 @@ def thompson_sampling_with_hint(arm_means, num_pulls, horizon, ordered_probs):
     # print("optimal arm prob: ", ordered_probs[-1])
     best_prob = ordered_probs[-1]
     for t in range(pulls_till_now, horizon):
-
-        thom_lls = get_thompson_lls(arm_means, num_pulls, best_prob)
+        thom_lls = get_thompson_lls(arm_means, num_pulls, ordered_probs)
         arm_to_pull = np.argmax(thom_lls)
         r_t = arms.pull_arm(arm_to_pull)
         if r_t==1:
             rew+=1
         arm_means[arm_to_pull] = (arm_means[arm_to_pull]*num_pulls[arm_to_pull]+r_t) / (num_pulls[arm_to_pull]+1)
         num_pulls[arm_to_pull]+=1
-
 
     return rew
 
@@ -302,11 +320,16 @@ if __name__ == '__main__':
         rew = thompson_sampling(arm_means, num_pulls, args.horizon)
     elif args.algorithm == 'thompson-sampling-with-hint':
         hint_probs = np.sort(arm_probs)
-        rew = thompson_sampling_with_hint(arm_means, num_pulls, args.horizon, hint_probs)
+        # rew = thompson_sampling_with_hint(arm_means, num_pulls, args.horizon, hint_probs)
+        rew = thompson_discrete(hint_probs, args.horizon)
+        # print("got reward: ", rew)
     else:
         raise NotImplementedError("{} not implemented", args.algorithm)
 
-    rew = rew+init_rew
+    if args.algorithm != 'thompson-sampling-with-hint':
+        rew = rew+init_rew
+
+
     reg = max_reward - rew
 
     if DEBUG:
