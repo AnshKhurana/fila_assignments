@@ -1,4 +1,5 @@
-1. Number of initial pulls to start the algorithms: INIT_PULLS global variable
+1. Number of initial pulls to start the algorithms: INIT_PULLS global variable (set to 3)
 
 2. Tie breaking: np.argmax does automatic tie breaking
+
 

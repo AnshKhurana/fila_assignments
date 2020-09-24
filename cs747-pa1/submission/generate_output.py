@@ -35,6 +35,7 @@ def perform_task1():
 
 
 if __name__ == '__main__':
+    exit()
     args = parser.parse_args()
     experiment_name = args.exp
 

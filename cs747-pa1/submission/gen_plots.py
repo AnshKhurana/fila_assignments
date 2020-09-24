@@ -5,11 +5,11 @@ def save_plot(values, title, instance_name, xtitle, ytitle, horizon=[100, 400, 1
 
     for algo_name in values.keys():
         print(algo_name, values[algo_name])
-        plt.plot(horizon, values[algo_name],  label=algo_name)
+        plt.plot(horizon, values[algo_name],  label=algo_name, marker='^')
 
     plt.xscale("log")
     plt.legend()
-    plt.xticks(horizon)
+    plt.xticks(horizon, horizon)
     plt.title('{} {} REG vs T'.format(instance_name, title))
 
     plt.xlabel(xtitle)
