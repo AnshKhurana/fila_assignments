@@ -11149,4 +11149,4 @@ transition 10095 3 10094 -2 1.0
 transition 10096 3 10095 -2 1.0 
 transition 10098 0 9997 -2 1.0 
 mdptype episodic
-discount 0.95
+discount 0.9

@@ -1,0 +1,3 @@
+numpy.org
+https://thomas-cokelaer.info/blog/2012/11/solving-a-linear-programming-problem-with-python-pulp/
+https://coin-or.github.io/pulp/CaseStudies/index.html
