@@ -1,8 +1,6 @@
 import argparse
 import numpy as np
 from pulp import *
-import math
-from matplotlib import pyplot as plt
 
 
 parser = argparse.ArgumentParser()
@@ -147,7 +145,7 @@ def lp_solver(numStates, numActions, startState, endStates, transitions, mdptype
     if DEBUG:
         print(gamma)
     prob = LpProblem("MDP_planning_problem", LpMinimize)
-    value_function_indices = ['%05d' % x for x in range(numStates)]
+    value_function_indices = ['%08d' % x for x in range(numStates)]
     if DEBUG:
         print(value_function_indices)
 
@@ -166,9 +164,9 @@ def lp_solver(numStates, numActions, startState, endStates, transitions, mdptype
     for s in range(numStates):
         for a in range(numActions):
             if (s, a) in transitions.keys():
-                prob += vars['%05d' % s] >= lpSum([p*(r+gamma*vars['%05d' % s_prime]) for (p, s_prime, r) in transitions[(s, a)]])
+                prob += vars['%08d' % s] >= lpSum([p*(r+gamma*vars['%08d' % s_prime]) for (p, s_prime, r) in transitions[(s, a)]])
             else:
-                prob += vars['%05d' % s] >= 0.0
+                prob += vars['%08d' % s] >= 0.0
 
     pulp.PULP_CBC_CMD(msg=False).solve(prob)
 
@@ -190,11 +188,11 @@ def lp_solver(numStates, numActions, startState, endStates, transitions, mdptype
     # given Q, get pi
     pi = [-1]*numStates
     for s in range(numStates):
-        choices = [Q[(s, a)] for a in range(numActions) if (s, a) in Q.keys()]
+        choices = [(Q[(s, a)], a) for a in range(numActions) if (s, a) in Q.keys()]
         if len(choices) == 0:
             pi[s] = -1
         else:
-            pi[s] = np.argmax(choices)
+            _, pi[s] = max(choices, key = lambda i : i[0])
 
     if mdptype == 'episodic':
         for state in endStates:
@@ -218,12 +216,15 @@ def solve_for_v(pi, numStates, numActions, transitions, gamma):
                     [(p, r)] = [(pp, rr) for (pp, sp, rr) in transitions[(s, pi[s])] if sp == s_prime]
                     Coeff2[s, s_prime] = gamma*p
                     B[s] += p*r
+                else:
+                    Coeff2[s, s_prime] = 0
 
     A = Coeff1 - Coeff2
     V = np.linalg.solve(A, B).squeeze()
 
-    print(pi)
-    print(V)
+    if DEBUG:
+        print(pi)
+        print(V)
     return V
 
 
@@ -237,8 +238,9 @@ def get_IS(numStates, numActions, V, transitions):
                 Q_sa = sum([p * (r + gamma * V[s_prime]) for (p, s_prime, r) in transitions[(s, a)]])
 
                 # pick the first action
-                if Q_sa > V[s]:
-                    print(Q_sa, V[s], a)
+                if Q_sa - V[s] > epsilon:
+                    if DEBUG:
+                        print(Q_sa, V[s], a)
                     IS.append((s, a))
                     break
     return IS
@@ -249,18 +251,26 @@ def hpi_solver(numStates, numActions, startState, endStates, transitions, mdptyp
     pi = np.zeros((numStates, 1))
     pi = pi.squeeze()
 
+    # fix initialization:
+    for s in range(numStates):
+        valid_action_set = [a for a in range(numActions) if (s, a) in transitions.keys()]
+
+        if len(valid_action_set) == 0:
+            pi[s] = -1
+        else:
+            pi[s] = valid_action_set[0]
+
     # given pi, solve for V
     V = solve_for_v(pi, numStates, numActions, transitions, gamma)
-
     IS = get_IS(numStates, numActions, V, transitions)
 
-    print(IS)
+
     while len(IS) > 0:
         for s, a in IS:
             pi[s] = a
         V = solve_for_v(pi, numStates, numActions, transitions, gamma)
         IS = get_IS(numStates, numActions, V, transitions)
-        print(IS)
+
 
     if mdptype == 'episodic':
         for state in endStates:
