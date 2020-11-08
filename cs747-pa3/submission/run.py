@@ -42,20 +42,10 @@ class GridWorld:
             self.action_dict[7] = np.array([-1, -1])
             self.valid_actions = np.array(list(range(8)))
 
-        # self.action_vector = np.array([self.action_dict[x] for x in self.valid_actions])
         self.uplift_vector = np.array([[-x, 0] for x in self.up_wind])
 
         if DEBUG:
             print("Uplift vector: ", self.uplift_vector)
-
-    # def get_valid_actions(self, current_state):
-    #     next_actions = []
-    #     next_state_vec = self.action_vector + current_state
-    #     for i in range(len(self.valid_actions)):
-    #         if 0 <= next_state_vec[i][0] < self.num_rows and 0 <= next_state_vec[i][1] < self.num_cols:
-    #             next_actions.append(i)
-    #
-    #     return np.array(next_actions)
 
     def is_valid_state(self, state):
         return 0 <= state[0] < self.num_rows and 0 <= state[1] < self.num_cols
@@ -157,9 +147,19 @@ def run_experiment(stochastic=False, king_moves=False, eps=0.1, alpha=0.5, horiz
             a_t1 = sample_e_greedy(num_actions, next_state, Q, eps)
             Q_c = Q[current_state[0], current_state[1], action_taken]
             target = reward + Q[next_state[0], next_state[1],  a_t1]
-            Q[current_state[0], current_state[1], action_taken] = Q_c + alpha * (target-Q_c)
+        elif algorithm == 'ql':
+            Q_c = Q[current_state[0], current_state[1], action_taken]
+            target = reward + np.max(Q[next_state[0], next_state[1], :])
+        elif algorithm == 'esarsa':
+            Q_c = Q[current_state[0], current_state[1], action_taken]
+            expectation_weights = np.array([eps/num_actions] * num_actions)
+            best_t1 = np.argmax(Q[next_state[0], next_state[1], :])
+            expectation_weights[best_t1] += 1-eps
+            assert np.sum(expectation_weights) == 1
+            target = reward + np.dot(expectation_weights, Q[next_state[0], next_state[1], :])
         else:
             raise NotImplementedError("{} has not been implemented.".format(algorithm))
+        Q[current_state[0], current_state[1], action_taken] = Q_c + alpha * (target - Q_c)
         current_state = next_state.copy()
 
     return num_episodes
@@ -183,3 +183,15 @@ if __name__ == '__main__':
                    horizon=args.horizon, algorithm=args.algorithm)
 
     print(num_episodes[-1])
+    pre = 'experiment'
+    if args.king_moves:
+       pre += '_king'
+    if args.stochastic:
+        pre += '_stochastic'
+
+    output_file_name = "{}.txt".format('_'.join([pre, args.algorithm, str(args.seed)]))
+
+    with open(output_file_name, 'w') as f:
+        for ep in num_episodes:
+            f.write('%s\n'%str(ep))
+
